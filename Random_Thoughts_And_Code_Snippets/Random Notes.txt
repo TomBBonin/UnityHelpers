@@ -1,0 +1,23 @@
+Random Notes :
+
+To correctly add bump map via script :
+material.SetTexture("_BumpMap", BumpTex);
+material.EnableKeyword("_NORMALMAP");
+(Some other possible keywords)
+_NORMALMAP -- _BumpMap
+_EMISSION -- _EmissionMap
+_SPECGLOSSMAP -- _SpecGlossMap
+_DETAIL_MULX2 -- _DetailAlbedoMap
+
+To fix PBR lighting that looks washed out : 
+[Window] -> [Lighting] -> Change Reflection Source from SkyBox to Custom
+
+To set Standard Shader Values : 
+material.SetFloat("_Glossiness", 0);
+Keywords found by Rightclick on Inspector tab and setting to Debug and looking through Float Firsts
+
+If ever Alpha Materials are rendering above each other :
+material.renderQueue = 3000; (lower Number is below, start at 3000)
+
+To Make sure Standard Shader is loaded with correct variants into build :
+- Create Materials that use the needed variants in Resources/Materials
