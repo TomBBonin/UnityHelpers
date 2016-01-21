@@ -1,6 +1,38 @@
-﻿using UnityEngine;
-using System.Collections;
+﻿/*
+ * Serialization helper for loading / saving objects
+ * Identical to the XML version but the Binary file isn't human readbale.
+ * See XML_SavedData example file to see how to setup your data class
+ * 
+ * Use Example : 
+ * 
+ * MyMapClass _map;
+ * bool LoadMap(string mapName)
+ * {
+ *     bool loadSuccess;
+ *     if (loadSuccess = ReadWriteBinary.Load<MyMapClass>(ref _map, mapName))
+ *         Debug.Log("Loaded Map : " + mapName);
+ *     else
+ *     {
+ *         Debug.LogError("FAILED to Load Map, loading default");
+ *         _map = new MyMapClass();
+ *     }
+ * }
+ * 
+ * bool SaveMap(string mapName)
+ * {
+ *     bool saveSuccess;
+ *     if (saveSuccess = ReadWriteBinary.Save<MyMapClass>(_map, mapName))
+ *         Debug.Log("Saved map");
+ *     else
+ *         Debug.Log("FAILED to Save map");
+ * }
+ * 
+ * 
+ * https://github.com/tombbonin
+ */
 
+using UnityEngine;
+using System.Collections;
 using System.IO;
 using System.Runtime.Serialization.Formatters.Binary;
 
