@@ -1,4 +1,33 @@
-﻿using UnityEngine;
+﻿/* 
+ * Function timer used for profiling in Unity
+ * 
+ * Use Example : 
+ * 
+ *  Update()
+ *  {
+ *      FunctionTimer.START_FUNCTION_TIMER("Function1");
+ *      Function1();
+ *      FunctionTimer.STOP_FUNCTION_TIMER("Function1");
+ *      
+ *      FunctionTimer.START_FUNCTION_TIMER("Function2");
+ *      Function2();
+ *      FunctionTimer.STOP_FUNCTION_TIMER("Function2");
+ *  }
+ *  
+ *  WheneverYouWantToPrint()
+ *  {
+ *      FunctionTimer.DISPLAY_FUNCTION_TIMER_AVERAGE(Function1);
+ *      FunctionTimer.DISPLAY_FUNCTION_TIMER_AVERAGE(Function2);
+ *      
+ *      // and if you are done using these 
+ *      FunctionTimer.RESET();
+ *  }
+ * 
+ * 
+ * https://github.com/tombbonin
+ */
+
+using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -6,48 +35,62 @@ using System.Threading;
 
 public class FunctionTimer 
 {
-    private static List<System.TimeSpan> _timeForFunction;
-    private static Stopwatch _stopwatch;
-    private static string _timed_Function_Name;
-
-    public static void INIT_FUNCTION_TIMER()
+    public class TimedFunction
     {
-        _timeForFunction = new List<System.TimeSpan>();
-        _stopwatch = new Stopwatch();
+        public double TimeSum;
+        public uint   Count;
+        public Stopwatch SWatch;
+        public TimedFunction() 
+        { 
+            TimeSum = 0; 
+            Count = 0;
+            SWatch = new Stopwatch();
+            SWatch.Start();
+        }
     }
+
+    private static Dictionary<string, TimedFunction> functionTimes = new Dictionary<string, TimedFunction>();
 
     public static void START_FUNCTION_TIMER(string functionName)
     {
-        _timed_Function_Name = functionName;
-        _stopwatch.Start();
+        TimedFunction timedFunc;
+        if (!functionTimes.TryGetValue(functionName, out timedFunc))
+            functionTimes.Add(functionName, timedFunc = new TimedFunction());
+        timedFunc.SWatch.Start();
     }
 
-    public static void STOP_FUNCTION_TIMER()
+    public static void STOP_FUNCTION_TIMER(string functionName)
     {
-        _stopwatch.Stop();
-        _timeForFunction.Add(_stopwatch.Elapsed);
-        _stopwatch.Reset();
-    }
-
-    public static void DISPLAY_FUNCTION_TIMER_AVERAGE()
-    {
-        if (_timeForFunction.Count == 0)
+        TimedFunction timedFunc;
+        if (!functionTimes.TryGetValue(functionName, out timedFunc))
         {
-            UnityEngine.Debug.Log("No Timed Function");
+            UnityEngine.Debug.LogError("FunctionTimer::StopFunctionTimer() -- Cannot stop timing this function, did you forget to start it?");
             return;
         }
 
-        System.TimeSpan avgTime = System.TimeSpan.Zero;
-        for (int i = 0; i < _timeForFunction.Count; i++)
-        {
-            avgTime += _timeForFunction[i];
-        }
-        double result = (avgTime.TotalMilliseconds / _timeForFunction.Count);
-        UnityEngine.Debug.Log(_timed_Function_Name + "() - Average Time = " + string.Format("{0:0.##}", result) + "ms Over " + _timeForFunction.Count + " iterations.");
+        timedFunc.SWatch.Stop();
+        functionTimes[functionName].TimeSum += timedFunc.SWatch.Elapsed.TotalMilliseconds;
+        functionTimes[functionName].Count += 1;
+        timedFunc.SWatch.Reset();
+    }
 
-        _timeForFunction.Clear();
-        _timed_Function_Name = "";
-        _stopwatch.Reset();
+    public static void DISPLAY_FUNCTION_TIMER_AVERAGE(string functionName)
+    {
+        if (!functionTimes.ContainsKey(functionName))
+        {
+            UnityEngine.Debug.LogError("FunctionTimer::DisplayFunctionTimeAvg() -- Unknown function Name!");
+            return;
+        }
+
+        TimedFunction timedFunc = functionTimes[functionName];
+
+        double result = (timedFunc.TimeSum / timedFunc.Count);
+        UnityEngine.Debug.Log(functionName + "() - Average Time = " + string.Format("{0:0.##}", result) + "ms Over " + timedFunc.Count + " iterations.");        
+    }
+
+    public static void RESET()
+    {
+        functionTimes.Clear();
     }
 }
 
