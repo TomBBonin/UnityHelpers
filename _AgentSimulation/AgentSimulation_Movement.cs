@@ -6,6 +6,9 @@
  * This is the basis for how movement works in my agent simulation at www.tombbonin.com/disastercraft
  * For just the flocking code, scroll down to the FlockingBehaviour function.
  * 
+ * Some things here are just for illustration purposes, to simplify showing only the movement behavior 
+ * handling. The data structures shown are far from optimal. For a better approach see AgentSimulation_DataStructures
+ * 
  * https://github.com/tombbonin
  */
 
@@ -84,7 +87,7 @@ public class AgentSimulation_Movement
     void UpdateNearbyAgents(ref Agent agent)
     {
         // look for nearby agents, add them to agent.NearbyAgents;
-        // Will depend on your data structure
+        // Will depend on your data structure, see AgentSimulation_DataStructures for how i did mine!
     }
 
     static void PerformMovementBehaviours(ref Agent agent, float deltaTime)
