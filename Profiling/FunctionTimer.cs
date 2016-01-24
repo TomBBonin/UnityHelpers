@@ -16,8 +16,8 @@
  *  
  *  WheneverYouWantToPrint()
  *  {
- *      FunctionTimer.DISPLAY_FUNCTION_TIMER_AVERAGE(Function1);
- *      FunctionTimer.DISPLAY_FUNCTION_TIMER_AVERAGE(Function2);
+ *      FunctionTimer.DISPLAY_FUNCTION_TIMER_AVERAGE("Function1");
+ *      FunctionTimer.DISPLAY_FUNCTION_TIMER_AVERAGE("Function2");
  *      
  *      // and if you are done using these 
  *      FunctionTimer.RESET();
