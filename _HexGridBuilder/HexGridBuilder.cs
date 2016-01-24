@@ -7,6 +7,11 @@
  * I currently haven't ran into any and so far it has done the job!
  * You can find and download a demo show casing how this works over at http://tombbonin.com/gridbuilder/
  * 
+ * With performance and efficiency in mind, i am trying to stay away from the standard Unity Component approach
+ * where every class extends MonoBehaviour and handles its own updates (the death of performance). 
+ * The pipe dream is to handle the simulation / game entirely in our own code with a Data Oriented philosophy
+ * and only using Unity as a graphics renderer (+ UI) via updating transform positions and rotations.
+ * 
  * https://github.com/tombbonin
  * 
  * ----------------
@@ -21,20 +26,22 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 
-[RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
-public class HexTileView : MonoBehaviour
+public class HexTileView
 {
+    public GameObject   Obj;
     public HexTile      parent;
     public Mesh         mesh;
     public MeshRenderer meshRenderer;
     public MeshFilter   meshFilter;
 
-    private void Awake()
+    public HexTileView(GameObject obj)
     {
-        meshRenderer = GetComponent<MeshRenderer>();
-        meshFilter = GetComponent<MeshFilter>();
+        Obj = obj;
+        meshRenderer = Obj.AddComponent<MeshRenderer>();
+        meshFilter   = Obj.AddComponent<MeshFilter>();
     }
-    private void Update() { }
+
+    public void Execute(float deltatime) { }
 }
 
 public enum TileAccessibility
@@ -43,25 +50,63 @@ public enum TileAccessibility
     Blocked
 }
 
-public class HexTile : MonoBehaviour 
+[RequireComponent(typeof(MeshCollider))]
+public class HexTileCollider : MonoBehaviour
+{   // For the sake of ease this class had remained a component to detect mouse clicks.
+    // It would be interesting to try how much slower / faster it would be to handle this ourselves.
+    // Get mouse position, transform it to world position, then to grid position and test input for clicks,
+    // and build state for hover.
+    public HexTile Tile;
+    public MeshCollider MCollider;
+
+    public void Awake()
+    {
+        MCollider = GetComponent<MeshCollider>();
+    }
+
+    public void OnMouseOver()  { Tile.OnMouseOver();  }
+    public void OnMouseEnter() { Tile.OnMouseEnter(); }
+    public void OnMouseExit()  { Tile.OnMouseExit();  }
+}
+
+public class HexTile 
 {
     public HexGrid     Grid;
+
+    public GameObject  Obj;
     public HexTileView View;
+    public GameObject  ViewObj;
     public HexTileView Overlay;
+    public GameObject  OverlayObj;
     public HexTileView GridOverlay;
-    public Vector2     Pos;
+    public GameObject  GridOverlayObj;
+    public HexTileCollider HexCollider;
+
+    public Vector2     Pos; // Grid Coord
     public int         Owner;
     public TileAccessibility Accessibility;
+
+    public HexTile(GameObject obj)
+    {
+        Obj = obj;
+    }
+
+    public void Execute(float deltaTime) 
+    {
+        View.Execute(deltaTime);
+        Overlay.Execute(deltaTime);
+        GridOverlay.Execute(deltaTime);
+    }
 
     public HexTileView CreateView(Mesh mesh, Material[] mats, string name, string layer)
     {
         var viewObj = new GameObject();
         viewObj.name = name;
         viewObj.layer = LayerMask.NameToLayer(layer);
-        viewObj.transform.parent = transform;
+        viewObj.transform.parent = Obj.transform;
         viewObj.transform.localPosition = new Vector3(0, 0, 0);
 
-        HexTileView view = viewObj.AddComponent<HexTileView>();
+        HexTileView view = new HexTileView(viewObj);
         view.mesh = mesh;
         view.parent = this;
         view.meshFilter.mesh = mesh;
@@ -84,7 +129,7 @@ public class HexTile : MonoBehaviour
         }
     }
 
-    private void OnMouseOver()  
+    public void OnMouseOver()  
     {
         if(Input.GetMouseButtonDown(0))
             Grid.EventDispatcher(this, GridEvent.TileMouseDownL);
@@ -93,17 +138,36 @@ public class HexTile : MonoBehaviour
         if (Input.GetMouseButtonDown(2))
             Grid.EventDispatcher(this, GridEvent.TileMouseDownM); 
     }
-    private void OnMouseEnter() { Grid.EventDispatcher(this, GridEvent.TileMouseEnter); }
-    private void OnMouseExit()  { Grid.EventDispatcher(this, GridEvent.TileMouseExit);  }
+    public void OnMouseEnter() { Grid.EventDispatcher(this, GridEvent.TileMouseEnter); }
+    public void OnMouseExit()  { Grid.EventDispatcher(this, GridEvent.TileMouseExit);  }
 }
 
-public class HexGridActor : MonoBehaviour 
+// This state is important as, actors are removed at the end of the grid execution, make sure
+// once an actor is destroyed not to process it
+public enum GridActorState
+{
+    Normal,
+    Destroyed
+}
+
+public class HexGridActor 
 {
     public HexGrid    Grid;
+    public GameObject Obj;
     public GameObject View;
     public Vector2    Pos;
     public int        Owner;
     public HexTile    Tile;
+    public GridActorState State;
+
+    public HexGridActor(GameObject obj)
+    {
+        Obj = obj;
+    }
+
+    virtual public void Execute(float deltaTime)
+    {
+    }
 }
 
 public class GridEventInfo : EventArgs
@@ -125,24 +189,39 @@ public class HexGrid
 {
     #region Variable Declaration
 
+    public GameObject Obj;
     public GameObject TilesObj;
     public GameObject ActorsObj;
     public Dictionary<Vector2, HexTile> Tiles = new Dictionary<Vector2, HexTile>();
     public Dictionary<int, MeshRenderer> Borders = new Dictionary<int, MeshRenderer>();
     public List<HexGridActor> Actors = new List<HexGridActor>();
+    public List<HexGridActor> ActorsToRemove = new List<HexGridActor>();
     public Vector2 Size;
     public float HexTileRadius;
     public float HexTileWidth;
 
     #endregion
 
-    public HexGrid(GameObject tilesObj, GameObject actorsObj, Vector2 size, float radius, float width)
+    public HexGrid(GameObject obj, GameObject tilesObj, GameObject actorsObj, Vector2 size, float radius, float width)
     {
+        Obj = obj;
         TilesObj = tilesObj;
         ActorsObj = actorsObj;
         Size = size;
         HexTileRadius = radius;
         HexTileWidth = width;
+    }
+
+    public void Execute(float deltaTime)
+    {
+        // Execute Tiles
+        foreach (KeyValuePair<Vector2, HexTile> entry in Tiles)
+            entry.Value.Execute(deltaTime);
+        // Execute Actors
+        foreach (HexGridActor actor in Actors)
+            actor.Execute(deltaTime);
+
+        ProcessActorsToRemove();
     }
 
     /////////////////////////
@@ -195,6 +274,24 @@ public class HexGrid
         }
     }
 
+    public void GetTileNeighbours(out List<Vector2> neighbours, Vector2 pos, int distance = 1)
+    {
+        neighbours = new List<Vector2>();
+        if (distance == 0)
+            return;
+        for (int x = -distance; x <= distance; x++)
+        {
+            for (int y = Mathf.Max(-distance, -x - distance); y <= Mathf.Min(distance, -x + distance); y++)
+            {
+                int offset = ((int)pos.x & 1) == 0 ? -(x & 1) : (x & 1);
+                Vector2 posToCheck = new Vector2(pos.x + x, pos.y + (-x - y + (x + offset) / 2));
+                HexTile neighbour = null;
+                if (posToCheck != pos && Tiles.TryGetValue(posToCheck, out neighbour))
+                    neighbours.Add(posToCheck);
+            }
+        }
+    }
+
     public Vector3 ToPixel(Vector2 gridPos)
     {
         var x = (float)(gridPos.x * 1.5f * HexTileRadius);
@@ -222,8 +319,8 @@ public class HexGrid
                 Tiles.TryGetValue(new Vector2(x, y), out tile);
                 if (tile != null)
                 {
-                    float dx = worldPos.x - tile.transform.position.x;
-                    float dy = worldPos.y - tile.transform.position.z;
+                    float dx = worldPos.x - tile.Obj.transform.position.x;
+                    float dy = worldPos.y - tile.Obj.transform.position.z;
                     float newdistance = (float)Mathf.Sqrt(dx * dx + dy * dy);
 
                     if (newdistance < distance)
@@ -321,15 +418,41 @@ public class HexGrid
 
         foreach(HexGridActor actor in Actors)
         {
-            if (actor.Pos == pos)
+            if (actor.Pos == pos && actor.State != GridActorState.Destroyed)
                 actors.Add(actor);
         }
+    }
+
+    public void RemoveActor(HexGridActor actor)
+    {
+        if (actor == null || actor.State == GridActorState.Destroyed) return;
+
+        ActorsToRemove.Add(actor);
+        actor.State = GridActorState.Destroyed;
+    }
+
+    private void ProcessActorsToRemove() 
+    {
+        if (ActorsToRemove.Count == 0)
+            return;
+       
+        for (int i = 0; i < ActorsToRemove.Count; i++)
+            for (int j = 0; j < Actors.Count; j++)
+                if (ActorsToRemove[i] == Actors[j])
+                {
+                    GameObject.Destroy(Actors[j].Obj);
+                    Actors.RemoveAt(j);
+                    break;
+                }
+ 
+        ActorsToRemove.Clear();
     }
 
     /////////////////////////
     //// Path finding
     /////////////////////////
-
+    
+    // Code for the Piority Queue and Tuple found through RedBlob Games
     public class Tuple<T1, T2>
     {
         public T1 First { get; private set; }
@@ -387,10 +510,9 @@ public class HexGrid
     public void Pathfind_AStar(Vector2 start, Vector2 end, out List<Vector2> aStarPath)
     {
         aStarPath = new List<Vector2>();
-        Dictionary<Vector2, Vector2> cameFrom = new Dictionary<Vector2, Vector2>();
+        Dictionary<Vector2, Vector2> cameFrom  = new Dictionary<Vector2, Vector2>();
         Dictionary<Vector2, int>     costSoFar = new Dictionary<Vector2, int>();
-
-        PriorityQueue<Vector2> frontier = new PriorityQueue<Vector2>();
+        PriorityQueue<Vector2>       frontier  = new PriorityQueue<Vector2>();
         frontier.Enqueue(start, 0);
         costSoFar[start] = 0;
         cameFrom[start] = start;
@@ -401,13 +523,13 @@ public class HexGrid
             if (current == end)
                 break;
 
-            List<HexTile> neighbours = new List<HexTile>();
+            List<Vector2> neighbours = new List<Vector2>();
             GetTileNeighbours(out neighbours, current);
 
             for (int i = 0; i < neighbours.Count; i++)
             {
-                Vector2 neighbour = neighbours[i].Pos;
-                int new_cost = costSoFar[current] + GetMoveCost(Tiles[current], neighbours[i]);
+                Vector2 neighbour = neighbours[i];
+                int new_cost = costSoFar[current] + GetMoveCost(current, neighbours[i]);
                 if (!costSoFar.ContainsKey(neighbour) || new_cost < costSoFar[neighbour])
                 {
                     costSoFar[neighbour] = new_cost;
@@ -428,6 +550,55 @@ public class HexGrid
         aStarPath.Reverse();
     }
 
+    public void Pathfind_FloodFill(Vector2 start, out Dictionary<Vector2, Vector2> cameFrom)
+    {
+        cameFrom  = new Dictionary<Vector2, Vector2>();
+        Dictionary<Vector2, int> costSoFar = new Dictionary<Vector2, int>();
+
+        // for multiple flood points (so Agents seek the closest "evac point" for example)
+        // stick everything below here in a loop, updating the start point at each iteration
+
+        PriorityQueue<Vector2>   frontier  = new PriorityQueue<Vector2>();
+        frontier.Enqueue(start, 0);
+        costSoFar[start] = 0;
+        cameFrom[start] = start;
+
+        while (frontier.Count != 0)
+        {
+            Vector2 current = frontier.Dequeue();
+            List<Vector2> neighbours = new List<Vector2>();
+            GetTileNeighbours(out neighbours, current);
+
+            for (int i = 0; i < neighbours.Count; i++)
+            {
+                Vector2 neighbour = neighbours[i];
+                int new_cost = costSoFar[current] + GetMoveCost(current, neighbours[i]);
+                if (!costSoFar.ContainsKey(neighbour) || new_cost < costSoFar[neighbour])
+                {
+                    costSoFar[neighbour] = new_cost;
+                    frontier.Enqueue(neighbour, new_cost);
+                    cameFrom[neighbour] = current;
+                }
+            }
+        }
+    }
+
+    public static void Pathfind_Floodfill_GetPath(Vector2 pos, out List<Vector2> path, Dictionary<Vector2, Vector2> floodFill)
+    {
+        // This returns the path from a specific position in the floodfill to the floodpoint
+        // Depending on your situation, it may be much faster to use a single floodfill algorithm and extract paths
+        // from it, then to perform multiple AStars.
+        path = new List<Vector2>();
+        Vector2 current = pos;
+        while (current != floodFill[current])
+        {
+            path.Add(current);
+            current = floodFill[current];
+        }
+        path.Add(current);
+    }
+
+    // The heuristic used for the A* Algorithm
     private float Evaluate(Vector2 posA, Vector2 posB)
     {
         return (Mathf.Abs(posA.x - posB.x) + Mathf.Abs(posA.y - posB.y));
@@ -436,8 +607,9 @@ public class HexGrid
     // You can attribute a move cost to tiles, 
     // By adding other enums to TileAccesibility. This would allow
     // for a higher move cost on Sand or Water for example
-    private int GetMoveCost(HexTile tileA, HexTile tileB)
+    private int GetMoveCost(Vector2 tileAPos, Vector2 tileBPos)
     {
+        HexTile tileB = Tiles[tileBPos];
         switch (tileB.Accessibility)
         {
             case TileAccessibility.Accessible:  return 1;
@@ -500,7 +672,7 @@ public class HexGridBuilder : MonoBehaviour
         actorsObj.transform.parent = gridObj.transform;
         actorsObj.name = "Actors";
 
-        var grid = new HexGrid(tilesObj, actorsObj, new Vector2(GridSizeX, GridSizeY), HexTileRadius, _hexTileWidth);
+        var grid = new HexGrid(gridObj, tilesObj, actorsObj, new Vector2(GridSizeX, GridSizeY), HexTileRadius, _hexTileWidth);
 
         for (int i = 0; i < GridSizeX; i++)
             for (int j = 0; j < GridSizeY; j++)
@@ -526,7 +698,7 @@ public class HexGridBuilder : MonoBehaviour
     virtual protected void CreateTile(int x, int y, HexGrid grid, int owner)
     {
         var hexTileObject = new GameObject();
-        var hexTile = hexTileObject.AddComponent<HexTile>();
+        var hexTile = new HexTile(hexTileObject);
         CreateHexTileAt(hexTile, x, y, grid, owner);
     }
 
@@ -539,13 +711,14 @@ public class HexGridBuilder : MonoBehaviour
         hexTile.Pos = gridPos;
         hexTile.Owner = owner;
         hexTile.Accessibility = TileAccessibility.Accessible;
-        hexTile.transform.position = worldPos;
-        hexTile.transform.parent = grid.TilesObj.transform;
-        hexTile.name = "Tile(" + x + ", " + y + ")";
+        hexTile.Obj.transform.position = worldPos;
+        hexTile.Obj.transform.parent = grid.TilesObj.transform;
+        hexTile.Obj.name = "Tile(" + x + ", " + y + ")";
 
-        var collider = hexTile.gameObject.AddComponent<MeshCollider>();
-        collider.sharedMesh = _hexTileMesh;
-        collider.convex = true;
+        hexTile.HexCollider = hexTile.Obj.AddComponent<HexTileCollider>();
+        hexTile.HexCollider.Tile = hexTile;
+        hexTile.HexCollider.MCollider.sharedMesh = _hexTileMesh;
+        hexTile.HexCollider.MCollider.convex = true;
 
         Material[] materials = new Material[2];
         materials[0] = HexTileBaseMats[0];
@@ -565,7 +738,7 @@ public class HexGridBuilder : MonoBehaviour
     {
         var actorObj = new GameObject();
         actorObj.name = objName;
-        var actor = actorObj.AddComponent<HexGridActor>();
+        var actor = new HexGridActor(actorObj);
         CreateHexGridActorAt(actor, pos, grid, owner, actorView);
         return actor;
     }
@@ -575,35 +748,20 @@ public class HexGridBuilder : MonoBehaviour
         var gridPos  = pos;
         var worldPos = grid.ToPixel(gridPos);
 
-        actor.transform.position = worldPos;
-        actor.transform.parent = grid.ActorsObj.transform;
+        actor.Obj.transform.position = worldPos;
+        actor.Obj.transform.parent = grid.ActorsObj.transform;
         actor.Grid = grid;
         actor.View = Instantiate(actorView) as GameObject;
         actor.View.name = "View";
-        actor.View.transform.parent = actor.transform;
+        actor.View.transform.parent = actor.Obj.transform;
         actor.View.transform.localPosition = actorView.transform.position;
         actor.View.transform.localRotation = actorView.transform.rotation;
         actor.Pos = gridPos;
         actor.Owner = owner;
         actor.Tile = grid.Tiles[gridPos];
+        actor.State = GridActorState.Normal;
 
         grid.Actors.Add(actor);
-    }
-
-    protected void RemoveActor(HexGridActor actor, HexGrid grid)
-    {
-        if (actor == null || grid == null)
-            return;
-
-        for (int i = 0; i < grid.Actors.Count; i++)
-        {
-            if (grid.Actors[i] == actor)
-            {
-                Destroy(actor.gameObject);
-                grid.Actors.RemoveAt(i);
-                return;
-            }
-        }
     }
 
     protected void CreatePlayerTerritoryBorders(HexGrid grid, GameObject gridObj)
