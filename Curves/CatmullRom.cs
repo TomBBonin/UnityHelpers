@@ -4,6 +4,11 @@
  * specifically the static Evaluate functions. If i come across 
  * the original post i'll make sure to give due credit here.
  * 
+ * If you want to be able to see the curves in Unity, call OnDrawGizmos in
+ * from a monobehaviour class. 
+ * If you want to be able to create the curves in editor, change the controlPoints to 
+ * Transform and use empty game objects as points.
+ * 
  * https://github.com/tombbonin
  */ 
 
@@ -13,9 +18,9 @@ using System.Collections;
 using System.Collections.Generic;
 
 [ExecuteInEditMode()]
-public class CatmullRom : MonoBehaviour
+public class CatmullRom //: MonoBehaviour if you want the OnDrawGizmos to be called automatically
 {
-    public Vector3[]    ControlPoints;
+    public Vector3[]    ControlPoints; // Transform[] for in Editor curve editing, you'll have to change code in the evaluate funcs
 	public bool 		CloseLoop;
 	public int 			SplineResolution;
 	public Color 		SplineColor;
@@ -119,7 +124,7 @@ public class CatmullRom : MonoBehaviour
 		return Evaluate(p0, p1, m0, m1, localT, out tangent, out curvature);
 	}
 		
-	void OnDrawGizmos()
+	public void OnDrawGizmos()
 	{
         if (ControlPoints == null)
             return;
@@ -188,7 +193,7 @@ public class CatmullRom : MonoBehaviour
 	}
 }
 
-public class CatmullRomFollower : MonoBehaviour
+public class CatmullRomFollower
 {
     protected CatmullRom _path;
     protected float _startTime;
@@ -198,6 +203,8 @@ public class CatmullRomFollower : MonoBehaviour
     protected float _maxBankAngle;
     protected float _bankSmoothing;
     protected float _prevBankAngle;
+
+    protected Transform _transform;
 
     public void MoveAlongCurve()
     {
@@ -219,7 +226,7 @@ public class CatmullRomFollower : MonoBehaviour
         // Update pos
         Vector3 tangent;
         Vector3 curvature;
-        transform.position = _path.Evaluate(_positionAlongCurve, out tangent, out curvature);
+        _transform.position = _path.Evaluate(_positionAlongCurve, out tangent, out curvature);
 
         float bankAngle = 0f;
         if (_maxBankAngle > 0)
@@ -237,20 +244,21 @@ public class CatmullRomFollower : MonoBehaviour
             futurePosOnCurveDist = Mathf.Clamp(futurePosOnCurveDist, 0f, _path.Length);
             Vector3 futurePosOnCurve = _path.Evaluate(futurePosOnCurveDist, out tangent, out curvature);
 
-            Debug.DrawLine(transform.position, futurePosOnCurve);
-            transform.forward = (futurePosOnCurve - transform.position).normalized;
+            Debug.DrawLine(_transform.position, futurePosOnCurve);
+            _transform.forward = (futurePosOnCurve - _transform.position).normalized;
         }
         else
         {
-            transform.forward = tangent.normalized;
+            _transform.forward = tangent.normalized;
         }
 
         if (bankAngle > 0)
-            transform.Rotate(Vector3.forward, bankAngle);
+            _transform.Rotate(Vector3.forward, bankAngle);
     }
 
-    public void StartMoving(CatmullRom path, float speed, float maxDrift = 0f, float maxBank = 0f, float bankSmoothing = 0f, float timeOffset = 0.001f)
+    public void StartMoving(Transform transform, CatmullRom path, float speed, float maxDrift = 0f, float maxBank = 0f, float bankSmoothing = 0f, float timeOffset = 0.001f)
     {
+        _transform = transform;
         _path = path;
         _speed = speed;
         _maxDrift = maxDrift;
