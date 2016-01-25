@@ -42,9 +42,9 @@ public class CatmullRom //: MonoBehaviour if you want the OnDrawGizmos to be cal
         // t on the curve. this lets us step through the curve at a constant pace.
         _distToTimeOnCurve = new List<KeyValuePair<float, float>>();
         _distToTimeOnCurve.Add(new KeyValuePair<float, float>(0.0f, 0.0f));
-        CPDists = new float[ControlPoints.Length];
-
-        for (int i = 0; i < ControlPoints.Length; i++)
+        int nbPoints = CloseLoop ? ControlPoints.Length : ControlPoints.Length - 1;
+        CPDists = new float[nbPoints];
+        for (int i = 0; i < nbPoints; i++)
         {
             CPDists[i] = distance;
 
@@ -136,7 +136,8 @@ public class CatmullRom //: MonoBehaviour if you want the OnDrawGizmos to be cal
         }
 
         // First for loop goes through each individual control point and connects it to the next, so 0-1, 1-2, 2-3 and so on
-        for (int i = 0; i < ControlPoints.Length; i++)
+        int nbPoints = CloseLoop ? ControlPoints.Length : ControlPoints.Length - 1;
+        for (int i = 0; i < nbPoints; i++)
         {
             Vector3 p0 = ControlPoints[i];
             Vector3 p1 = ControlPoints[GetClampedPointIdx(i + 1)];
@@ -186,9 +187,9 @@ public class CatmullRom //: MonoBehaviour if you want the OnDrawGizmos to be cal
 	int GetClampedPointIdx(int pointIdx)  
 	{
         if (pointIdx < 0)
-            return CloseLoop ? ControlPoints.Length - 1 : 0;
+            return CloseLoop ? ControlPoints.Length + pointIdx : 0;
         if (pointIdx >= ControlPoints.Length)
-            return CloseLoop ? 0 : ControlPoints.Length - 1;
+            return CloseLoop ? pointIdx % ControlPoints.Length : ControlPoints.Length - 1;
         return pointIdx;
 	}
 }
