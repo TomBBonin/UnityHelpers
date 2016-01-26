@@ -109,7 +109,7 @@ public class CatmullRom //: MonoBehaviour if you want the OnDrawGizmos to be cal
 	public Vector3 Evaluate(float posOnCurve, out Vector3 tangent, out Vector3 curvature) 
 	{
 		int i = 0;
-		while(i < CPDists.Length -1 && posOnCurve > CPDists[i])
+		while(i < CPDists.Length -1 && posOnCurve >= CPDists[i])
 			i++;
 		i--;
 
@@ -160,7 +160,7 @@ public class CatmullRom //: MonoBehaviour if you want the OnDrawGizmos to be cal
                 Gizmos.color = TangentColor;
                 Gizmos.DrawRay(end, tangent.normalized * 10f);
                 Gizmos.color = CurvatureColor;
-                Gizmos.DrawRay(end, curvature);
+                Gizmos.DrawRay(end, curvature.normalized * 10f);
                 Gizmos.color = CrossColor;
                 Gizmos.DrawLine(end + Vector3.Cross(tangent, Vector3.up).normalized, end - Vector3.Cross(tangent, Vector3.up).normalized);
 
@@ -258,7 +258,7 @@ public class CatmullRomFollower
             _transform.Rotate(Vector3.forward, bankAngle);
     }
 
-    public void StartMoving(Transform transform, CatmullRom path, float speed, float maxDrift = 0f, float maxBank = 0f, float bankSmoothing = 0f, float timeOffset = 0.001f)
+    public void StartMoving(Transform transform, CatmullRom path, float speed, float maxDrift = 0f, float maxBank = 0f, float bankSmoothing = 0f, float timeOffset = 0f)
     {
         _transform = transform;
         _path = path;
