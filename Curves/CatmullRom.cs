@@ -43,7 +43,7 @@ public class CatmullRom //: MonoBehaviour if you want the OnDrawGizmos to be cal
         _distToTimeOnCurve = new List<KeyValuePair<float, float>>();
         _distToTimeOnCurve.Add(new KeyValuePair<float, float>(0.0f, 0.0f));
         int nbPoints = CloseLoop ? ControlPoints.Length : ControlPoints.Length - 1;
-        CPDists = new float[nbPoints];
+        CPDists = new float[CloseLoop ? ControlPoints.Length + 1 : ControlPoints.Length];
         for (int i = 0; i < nbPoints; i++)
         {
             CPDists[i] = distance;
@@ -66,6 +66,7 @@ public class CatmullRom //: MonoBehaviour if you want the OnDrawGizmos to be cal
                 start = end;
             }
         }
+        CPDists[nbPoints] = distance;
     }
 	
 	public static Vector3 Evaluate(Vector3 p0, Vector3 p1, Vector3 tanP0, Vector3 tanP2, float t)
