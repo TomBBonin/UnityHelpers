@@ -12,13 +12,11 @@
  * https://github.com/tombbonin
  */ 
 
-
 using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
 
-[ExecuteInEditMode()]
-public class CatmullRom //: MonoBehaviour if you want the OnDrawGizmos to be called automatically
+public class CatmullRom //: MonoBehaviour //if you want the OnDrawGizmos to be called automatically
 {
     public Vector3[]    ControlPoints; // Transform[] for in Editor curve editing, you'll have to change code in the evaluate funcs
 	public bool 		CloseLoop;
@@ -28,47 +26,23 @@ public class CatmullRom //: MonoBehaviour if you want the OnDrawGizmos to be cal
 	public Color 		CrossColor;
 	public Color 		CurvatureColor;
 	public Color 		BankColor;
-	private const float MaxBankAngleForGizmo = 45f;
+	public float        MaxBankAngle = 45f;
+    public float[]      CPDists;
+    public float        Length { get { return CPDists[CPDists.Length-1]; } }
 
-	private List<KeyValuePair<float, float>> _distToTimeOnCurve;
-	public float Length	{ get { return _distToTimeOnCurve[_distToTimeOnCurve.Count - 1].Key; } }
-
-	private float[] CPDists;
-
-    public void Init()
+    public void MeasureCurve()
     {
-        float distance = 0.0f;
-        // we precompute a bunch of values representing what the distance is at a given
-        // t on the curve. this lets us step through the curve at a constant pace.
-        _distToTimeOnCurve = new List<KeyValuePair<float, float>>();
-        _distToTimeOnCurve.Add(new KeyValuePair<float, float>(0.0f, 0.0f));
+        List<CatmullRomCurvePosition> positionsOnCurve = GetAllCurveSubDivisionPositions();
         int nbPoints = CloseLoop ? ControlPoints.Length : ControlPoints.Length - 1;
-        CPDists = new float[CloseLoop ? ControlPoints.Length + 1 : ControlPoints.Length];
-        for (int i = 0; i < nbPoints; i++)
+        CPDists = new float[nbPoints + 1];
+        int idx = 0;
+        for (int i = 0; i < positionsOnCurve.Count; i+= SplineResolution)
         {
-            CPDists[i] = distance;
-
-            Vector3 p0 = ControlPoints[i];
-            Vector3 p1 = ControlPoints[GetClampedPointIdx(i + 1)];
-            Vector3 m0 = 0.5f * (p1 - ControlPoints[GetClampedPointIdx(i - 1)]);
-            Vector3 m1 = 0.5f * (ControlPoints[GetClampedPointIdx(i + 2)] - p0);
-
-            Vector3 start = p0;
-            // Second for loop actually creates the spline for this particular segment
-            for (int j = 0; j <= SplineResolution; j++)
-            {
-                float t = (float)j / SplineResolution;
-                Vector3 tangent;
-                Vector3 end = Evaluate(p0, p1, m0, m1, t, out tangent);
-
-                distance += Vector3.Distance(start, end);
-                _distToTimeOnCurve.Add(new KeyValuePair<float, float>(distance, t));
-                start = end;
-            }
+            CPDists[idx] = positionsOnCurve[i].DistanceOnCurve;
+            idx++;
         }
-        CPDists[nbPoints] = distance;
     }
-	
+
 	public static Vector3 Evaluate(Vector3 p0, Vector3 p1, Vector3 tanP0, Vector3 tanP2, float t)
 	{
 		// Catmull-Rom splines are Hermite curves with special tangent values.
@@ -107,6 +81,7 @@ public class CatmullRom //: MonoBehaviour if you want the OnDrawGizmos to be cal
 	}
 
 	public Vector3 Evaluate(float posOnCurve, out Vector3 tangent, out Vector3 curvature) 
+
 	{
 		int i = 0;
 		while(i < CPDists.Length -1 && posOnCurve >= CPDists[i])
@@ -136,41 +111,24 @@ public class CatmullRom //: MonoBehaviour if you want the OnDrawGizmos to be cal
             Gizmos.DrawWireSphere(point, 2f);
         }
 
-        // First for loop goes through each individual control point and connects it to the next, so 0-1, 1-2, 2-3 and so on
-        int nbPoints = CloseLoop ? ControlPoints.Length : ControlPoints.Length - 1;
-        for (int i = 0; i < nbPoints; i++)
+        List<CatmullRomCurvePosition> positionsOnCurve = GetAllCurveSubDivisionPositions();
+        CatmullRomCurvePosition prevPos = positionsOnCurve[0];
+        foreach(CatmullRomCurvePosition curvePos in positionsOnCurve)
         {
-            Vector3 p0 = ControlPoints[i];
-            Vector3 p1 = ControlPoints[GetClampedPointIdx(i + 1)];
-            Vector3 m0 = 0.5f * (p1 - ControlPoints[GetClampedPointIdx(i - 1)]);
-            Vector3 m1 = 0.5f * (ControlPoints[GetClampedPointIdx(i + 2)] - p0);
+            Gizmos.color = SplineColor;
+            Gizmos.DrawLine(prevPos.Pos, curvePos.Pos);
+            Gizmos.color = TangentColor;
+            Gizmos.DrawRay(curvePos.Pos, curvePos.Tangent.normalized * 20f);
+            Gizmos.color = CurvatureColor;
+            Gizmos.DrawRay(curvePos.Pos, curvePos.Curvature.normalized * 20f);
+            Gizmos.color = CrossColor;
+            Gizmos.DrawLine(curvePos.Pos + Vector3.Cross(curvePos.Tangent, Vector3.up).normalized * 5f, curvePos.Pos);// - Vector3.Cross(curvePos.Tangent, Vector3.up).normalized * 5f);
 
-            Vector3 start = p0;
-            // Second for loop actually creates the spline for this particular segment
-            for (int j = 0; j <= SplineResolution; j++)
-            {
-                float t = (float)j / SplineResolution;
-
-                Vector3 tangent;
-                Vector3 curvature;
-                Vector3 end = Evaluate(p0, p1, m0, m1, t, out tangent, out curvature);
-
-                Gizmos.color = SplineColor;
-                Gizmos.DrawLine(start, end);
-                Gizmos.color = TangentColor;
-                Gizmos.DrawRay(end, tangent.normalized * 10f);
-                Gizmos.color = CurvatureColor;
-                Gizmos.DrawRay(end, curvature.normalized * 10f);
-                Gizmos.color = CrossColor;
-                Gizmos.DrawLine(end + Vector3.Cross(tangent, Vector3.up).normalized, end - Vector3.Cross(tangent, Vector3.up).normalized);
-
-                float angle = GetBankAngle(tangent, curvature, MaxBankAngleForGizmo);
-                var upwards = Quaternion.AngleAxis(angle, tangent) * Vector3.up;
-                Gizmos.color = BankColor;
-                Gizmos.DrawLine(end, end + upwards * 100f);
-
-                start = end;
-            }
+            float angle = GetBankAngle(curvePos.Tangent, curvePos.Curvature, MaxBankAngle);
+            var upwards = Quaternion.AngleAxis(angle, curvePos.Tangent) * Vector3.up;
+            Gizmos.color = BankColor;
+            Gizmos.DrawLine(curvePos.Pos, curvePos.Pos + upwards * 100f);
+            prevPos = curvePos;
         }
 	}
 
@@ -185,14 +143,69 @@ public class CatmullRom //: MonoBehaviour if you want the OnDrawGizmos to be cal
 
 	//Clamp the list positions to allow looping
 	//start over again when reaching the end or beginning
-	int GetClampedPointIdx(int pointIdx)  
+	public int GetClampedPointIdx(int pointIdx)  
 	{
         if (pointIdx < 0)
-            return CloseLoop ? ControlPoints.Length + pointIdx : 0;
+			return CloseLoop ? ControlPoints.Length + pointIdx: 0;
         if (pointIdx >= ControlPoints.Length)
             return CloseLoop ? pointIdx % ControlPoints.Length : ControlPoints.Length - 1;
         return pointIdx;
 	}
+
+    public List<CatmullRomCurvePosition> GetAllCurveSubDivisionPositions()
+    {       
+        // First for loop goes through each individual control point and connects it to the next, so 0-1, 1-2, 2-3 and so on
+        float distanceOnCurve = 0f;
+        CatmullRomCurvePosition prevPos = new CatmullRomCurvePosition();
+        prevPos.Pos = ControlPoints[0];
+        // If we are looping, we are adding an extra segment, so we need an extra point
+        int nbPoints = CloseLoop ? ControlPoints.Length : ControlPoints.Length - 1;
+        List<CatmullRomCurvePosition> positions = new List<CatmullRomCurvePosition>(nbPoints * SplineResolution + 1);
+        Vector3 p0 = Vector3.zero, p1 = Vector3.zero, m0 = Vector3.zero, m1 = Vector3.zero;
+        for (int i = 0; i < nbPoints; i++)
+        {
+            p0 =              ControlPoints[i];
+            p1 =              ControlPoints[GetClampedPointIdx(i + 1)];
+            m0 = 0.5f * (p1 - ControlPoints[GetClampedPointIdx(i - 1)]);
+            m1 = 0.5f * (     ControlPoints[GetClampedPointIdx(i + 2)] - p0);
+            // Second for loop actually creates the spline for this particular segment
+            for (int j = 0; j < SplineResolution; j++)
+                AddPosOnCurve(ref positions, p0, p1, m0, m1, (float)j / SplineResolution, ref distanceOnCurve, ref prevPos);
+        }
+        // we have to manually add the last point on the spline
+        AddPosOnCurve(ref positions, p0, p1, m0, m1, 1f, ref distanceOnCurve, ref prevPos);       
+        return positions;
+    }
+
+    private void AddPosOnCurve(ref List<CatmullRomCurvePosition> positions, Vector3 p0, Vector3 p1, Vector3 m0, Vector3 m1, float t, ref float distanceOnCurve, ref CatmullRomCurvePosition prevPos)
+    {
+        CatmullRomCurvePosition posOnCurve = new CatmullRomCurvePosition();
+        posOnCurve.Pos = CatmullRom.Evaluate(p0, p1, m0, m1, t, out posOnCurve.Tangent, out posOnCurve.Curvature);
+        posOnCurve.Bank = GetBankAngle(posOnCurve.Tangent, posOnCurve.Curvature, MaxBankAngle);
+
+        // Hack to try to avoid borked look rotations when this dot == 1, taking any ideas! This seems to improve
+        // but not 100% at all
+        float dot = Vector3.Dot(posOnCurve.Tangent.normalized, Vector3.up);
+        if(dot >= 0.98 || dot <= -0.98)
+            posOnCurve.Normal = Vector3.Cross(posOnCurve.Tangent, Vector3.forward).normalized;
+        else
+            posOnCurve.Normal = Vector3.Cross(posOnCurve.Tangent, Vector3.up).normalized;
+
+        distanceOnCurve += Vector3.Distance(posOnCurve.Pos, prevPos.Pos);
+        posOnCurve.DistanceOnCurve = distanceOnCurve;
+        positions.Add(posOnCurve);
+        prevPos = posOnCurve;
+    }
+}
+
+public class CatmullRomCurvePosition
+{
+    public Vector3 Pos;
+    public Vector3 Tangent;
+    public Vector3 Curvature;
+    public Vector3 Normal;
+    public float   Bank;
+    public float   DistanceOnCurve;
 }
 
 public class CatmullRomFollower
