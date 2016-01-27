@@ -23,7 +23,7 @@ public class CatmullRom //: MonoBehaviour //if you want the OnDrawGizmos to be c
 	public int 			SplineResolution;
 	public Color 		SplineColor;
 	public Color 		TangentColor;
-	public Color 		CrossColor;
+	public Color 		NormalColor;
 	public Color 		CurvatureColor;
 	public Color 		BankColor;
 	public float        MaxBankAngle = 45f;
@@ -43,7 +43,7 @@ public class CatmullRom //: MonoBehaviour //if you want the OnDrawGizmos to be c
         }
     }
 
-	public static Vector3 Evaluate(Vector3 p0, Vector3 p1, Vector3 tanP0, Vector3 tanP2, float t)
+    private static Vector3 Evaluate(Vector3 p0, Vector3 p1, Vector3 tanP0, Vector3 tanP2, float t)
 	{
 		// Catmull-Rom splines are Hermite curves with special tangent values.
 		// Hermite curve formula:
@@ -57,8 +57,8 @@ public class CatmullRom //: MonoBehaviour //if you want the OnDrawGizmos to be c
 						+ 		  (t * t * t -        t * t) 	    * tanP2;
 		return position;
 	}
-	
-	public static Vector3 Evaluate(Vector3 p0, Vector3 p1, Vector3 tanP0, Vector3 tanP1, float t, out Vector3 tangent)
+
+    private static Vector3 Evaluate(Vector3 p0, Vector3 p1, Vector3 tanP0, Vector3 tanP1, float t, out Vector3 tangent)
 	{
 		// Calculate tangents
 		// p'(t) = (6t² - 6t)p0 + (3t² - 4t + 1)m0 + (-6t² + 6t)p1 + (3t² - 2t)m1
@@ -68,8 +68,8 @@ public class CatmullRom //: MonoBehaviour //if you want the OnDrawGizmos to be c
 			   +  (3 * t * t - 2 * t)     * tanP1;
 		return Evaluate(p0, p1, tanP0, tanP1, t);
 	}
-	
-	public static Vector3 Evaluate(Vector3 p0, Vector3 p1, Vector3 tanP0, Vector3 tanP1, float t, out Vector3 tangent, out Vector3 curvature)
+
+    private static Vector3 Evaluate(Vector3 p0, Vector3 p1, Vector3 tanP0, Vector3 tanP1, float t, out Vector3 tangent, out Vector3 curvature)
 	{
 		// Calculate second derivative (curvature)
 		// p''(t) = (12t - 6)p0 + (6t - 4)m0 + (-12t + 6)p1 + (6t - 2)m1
@@ -81,7 +81,6 @@ public class CatmullRom //: MonoBehaviour //if you want the OnDrawGizmos to be c
 	}
 
 	public Vector3 Evaluate(float posOnCurve, out Vector3 tangent, out Vector3 curvature) 
-
 	{
 		int i = 0;
 		while(i < CPDists.Length -1 && posOnCurve >= CPDists[i])
@@ -121,16 +120,17 @@ public class CatmullRom //: MonoBehaviour //if you want the OnDrawGizmos to be c
             Gizmos.DrawRay(curvePos.Pos, curvePos.Tangent.normalized * 20f);
             Gizmos.color = CurvatureColor;
             Gizmos.DrawRay(curvePos.Pos, curvePos.Curvature.normalized * 20f);
-            Gizmos.color = CrossColor;
-            Gizmos.DrawLine(curvePos.Pos + Vector3.Cross(curvePos.Tangent, Vector3.up).normalized * 5f, curvePos.Pos);// - Vector3.Cross(curvePos.Tangent, Vector3.up).normalized * 5f);
+            Gizmos.color = NormalColor;
+            Gizmos.DrawRay(curvePos.Pos,curvePos.Normal * 5f);
 
             float angle = GetBankAngle(curvePos.Tangent, curvePos.Curvature, MaxBankAngle);
             var upwards = Quaternion.AngleAxis(angle, curvePos.Tangent) * Vector3.up;
             Gizmos.color = BankColor;
-            Gizmos.DrawLine(curvePos.Pos, curvePos.Pos + upwards * 100f);
+            Gizmos.DrawRay(curvePos.Pos, upwards * 20f);
+
             prevPos = curvePos;
         }
-	}
+    }
 
 	public static float GetBankAngle(Vector3 tangent, Vector3 curvature, float maxBank)
 	{
@@ -140,11 +140,11 @@ public class CatmullRom //: MonoBehaviour //if you want the OnDrawGizmos to be c
 			angle *= -1;
 		return angle;
 	}
-
-	//Clamp the list positions to allow looping
-	//start over again when reaching the end or beginning
-	public int GetClampedPointIdx(int pointIdx)  
+	
+    private int GetClampedPointIdx(int pointIdx)  
 	{
+        //Clamp the list positions to allow looping
+        //start over again when reaching the end or beginning
         if (pointIdx < 0)
 			return CloseLoop ? ControlPoints.Length + pointIdx: 0;
         if (pointIdx >= ControlPoints.Length)
@@ -152,9 +152,17 @@ public class CatmullRom //: MonoBehaviour //if you want the OnDrawGizmos to be c
         return pointIdx;
 	}
 
-    public List<CatmullRomCurvePosition> GetAllCurveSubDivisionPositions()
-    {       
-        // First for loop goes through each individual control point and connects it to the next, so 0-1, 1-2, 2-3 and so on
+    public List<CatmullRomCurvePosition> GetAllCurveSubDivisionPositions(/*bool rebuild*/)
+    {
+        /* By adding a private List<CatmullRomCurvePosition> _positionsOnCurve;
+         * variable to this Catmull Rom, we can prevent recomputing the entire curve, if it isnt needed.
+         * When drawing gizmos for example. If the points or resolution change though, this must be rebuilt
+         * depending on your project, think about it!
+         *if(_positionsOnCurve != null && !rebuild)
+         *    return _positionsOnCurve;
+         */
+
+        // First for loop goes through each control point, the second subdivides the path between CPs based on resolution
         float distanceOnCurve = 0f;
         CatmullRomCurvePosition prevPos = new CatmullRomCurvePosition();
         prevPos.Pos = ControlPoints[0];
@@ -173,7 +181,9 @@ public class CatmullRom //: MonoBehaviour //if you want the OnDrawGizmos to be c
                 AddPosOnCurve(ref positions, p0, p1, m0, m1, (float)j / SplineResolution, ref distanceOnCurve, ref prevPos);
         }
         // we have to manually add the last point on the spline
-        AddPosOnCurve(ref positions, p0, p1, m0, m1, 1f, ref distanceOnCurve, ref prevPos);       
+        AddPosOnCurve(ref positions, p0, p1, m0, m1, 1f, ref distanceOnCurve, ref prevPos);
+
+        /* return _positionsOnCurve = positions; */ // If we are storing these positions, they need to be assigned and returned
         return positions;
     }
 
