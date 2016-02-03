@@ -277,7 +277,7 @@ public class CatmullRomFollower
             _transform.forward = tangent.normalized;
         }
 
-        if (bankAngle > 0)
+        if (bankAngle != 0)
             _transform.Rotate(Vector3.forward, bankAngle);
     }
 
