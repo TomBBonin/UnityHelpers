@@ -1,8 +1,7 @@
 ﻿/* 
  * Curve tool for Unity to easily visualize smooth curves
- * and make actors follow them. A lot of the math was found online, 
- * specifically the static Evaluate functions. If i come across 
- * the original post i'll make sure to give due credit here.
+ * and make actors follow them. Large parts of this (specifically Evaluate functions) were inspired by
+ * Nick Hall's work on splines that can be found at https://github.com/nickhall/Unity-Procedural.
  * 
  * If you want to be able to see the curves in Unity, call OnDrawGizmos in
  * from a monobehaviour class. 
@@ -193,13 +192,10 @@ public class CatmullRom //: MonoBehaviour //if you want the OnDrawGizmos to be c
         posOnCurve.Pos = CatmullRom.Evaluate(p0, p1, m0, m1, t, out posOnCurve.Tangent, out posOnCurve.Curvature);
         posOnCurve.Bank = GetBankAngle(posOnCurve.Tangent, posOnCurve.Curvature, MaxBankAngle);
 
-        // Hack to try to avoid borked look rotations when this dot == 1, taking any ideas! This seems to improve
-        // but not 100% at all
-        float dot = Vector3.Dot(posOnCurve.Tangent.normalized, Vector3.up);
-        if(dot >= 0.98 || dot <= -0.98)
-            posOnCurve.Normal = Vector3.Cross(posOnCurve.Tangent, Vector3.forward).normalized;
-        else
-            posOnCurve.Normal = Vector3.Cross(posOnCurve.Tangent, Vector3.up).normalized;
+        // Not ideal, will break if 3 points are colinear
+        posOnCurve.Normal = Vector3.Cross(posOnCurve.Curvature, posOnCurve.Tangent).normalized;
+        if (Vector3.Dot(posOnCurve.Normal, prevPos.Normal) < 0)
+            posOnCurve.Normal *= -1;
 
         distanceOnCurve += Vector3.Distance(posOnCurve.Pos, prevPos.Pos);
         posOnCurve.DistanceOnCurve = distanceOnCurve;
