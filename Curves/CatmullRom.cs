@@ -10,7 +10,6 @@
  */
 
 using UnityEngine;
-using System.Collections.Generic;
 
 namespace Curves
 {
@@ -120,7 +119,7 @@ namespace Curves
             var prevPos = new CurvePoint { Position = ControlPoints[0] };
             // If we are looping, we are adding an extra segment, so we need an extra point
             var nbPoints = CloseLoop ? ControlPoints.Length : ControlPoints.Length - 1;
-            var positions = new List<CurvePoint>(nbPoints * Resolution + 1);
+            var positions = new CurvePoint[nbPoints * Resolution + 1];
             Vector3 p0 = Vector3.zero, p1 = Vector3.zero, m0 = Vector3.zero, m1 = Vector3.zero;
             for (var i = 0; i < nbPoints; i++)
             {
@@ -130,17 +129,15 @@ namespace Curves
                 m1 = 0.5f * (ControlPoints[GetClampedPointIdx(i + 2)] - p0);
                 // Second for loop actually creates the spline for this particular segment
                 for (var j = 0; j < Resolution; j++)
-                    AddPointOnCurve(ref positions, p0, p1, m0, m1, (float)j / Resolution, ref distanceOnCurve, ref prevPos);
+                    positions[i * Resolution + j] = GetPointOnCurve(p0, p1, m0, m1, (float)j / Resolution, ref distanceOnCurve, ref prevPos);
             }
             // we have to manually add the last point on the spline
-            AddPointOnCurve(ref positions, p0, p1, m0, m1, 1f, ref distanceOnCurve, ref prevPos);
-
-            var posArray = positions.ToArray();
-            FixNormals(ref posArray);
-            return posArray;
+            positions[nbPoints * Resolution] = GetPointOnCurve(p0, p1, m0, m1, 1f, ref distanceOnCurve, ref prevPos);
+            FixNormals(ref positions);
+            return positions;
         }
 
-        private static void AddPointOnCurve(ref List<CurvePoint> positions, Vector3 p0, Vector3 p1, Vector3 m0, Vector3 m1, float t, ref float distanceOnCurve, ref CurvePoint prevPos)
+        private static CurvePoint GetPointOnCurve(Vector3 p0, Vector3 p1, Vector3 m0, Vector3 m1, float t, ref float distanceOnCurve, ref CurvePoint prevPos)
         {
             var posOnCurve = new CurvePoint();
             posOnCurve.Position = Evaluate(p0, p1, m0, m1, t, out posOnCurve.Tangent, out posOnCurve.Curvature);
@@ -153,44 +150,14 @@ namespace Curves
 
             distanceOnCurve += Vector3.Distance(posOnCurve.Position, prevPos.Position);
             posOnCurve.DistanceOnCurve = distanceOnCurve;
-            positions.Add(posOnCurve);
             prevPos = posOnCurve;
+            return posOnCurve;
         }
 
         public static CurvePoint[] GetCurvePoints(int resolution, Vector3[] controlPoints, bool closeLoop = false)
         {
-            var catmullRom = new CatmullRom(resolution, controlPoints, closeLoop);
-            return catmullRom.GetCurvePoints();
-        }
-
-        public override void Draw()
-        {
-            // call in OnDrawGizmos
-            if (ControlPoints == null)
-                return;
-
-            foreach (var point in ControlPoints)
-            {
-                Gizmos.color = Color.yellow;
-                Gizmos.DrawWireSphere(point, 0.5f);
-            }
-
-            var pointsOnCurve = GetCurvePoints();
-            var prevPos = pointsOnCurve[0];
-            foreach (var curvePos in pointsOnCurve)
-            {
-                Gizmos.color = SplineColor;
-                Gizmos.DrawLine(prevPos.Position, curvePos.Position);
-                Gizmos.color = TangentColor;
-                Gizmos.DrawRay(curvePos.Position, curvePos.Tangent.normalized);
-                Gizmos.color = CurvatureColor;
-                Gizmos.DrawRay(curvePos.Position, curvePos.Curvature.normalized);
-                Gizmos.color = NormalColor;
-                Gizmos.DrawRay(curvePos.Position, curvePos.Normal);
-                Gizmos.color = BankColor;
-                Gizmos.DrawRay(curvePos.Position, Quaternion.AngleAxis(curvePos.Bank, curvePos.Tangent) * Vector3.up);
-                prevPos = curvePos;
-            }
+            var curve = new CatmullRom(resolution, controlPoints, closeLoop);
+            return curve.GetCurvePoints();
         }
     }
 }

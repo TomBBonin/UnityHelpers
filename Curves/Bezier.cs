@@ -6,7 +6,6 @@
  * https://github.com/tombbonin
  */
 
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace Curves
@@ -173,48 +172,10 @@ namespace Curves
             return positions;
         }
 
-        public override void Draw()
+        public static CurvePoint[] GetCurvePoints(int resolution, Vector3[] controlPoints)
         {
-            // call in OnDrawGizmos
-            if (ControlPoints == null)
-                return;
-
-            foreach (var point in ControlPoints)
-            {
-                Gizmos.color = Color.yellow;
-                Gizmos.DrawWireSphere(point, 0.5f);
-            }
-
-            Gizmos.color = SplineColor;
-            var prevPos = ControlPoints[0];
-            var currPos = Vector3.zero;
-            var tangent = Vector3.zero;
-            var prevNormal = Vector3.zero;
-            var normal = Vector3.zero;
-            var curvature = Vector3.zero;
-            for (int i = 1; i <= Resolution; i++)
-            {
-                float t = 1f / Resolution * i;
-                currPos = Evaluate(t, out tangent, out curvature);
-                normal = Vector3.Cross(curvature, tangent).normalized;
-                if (Vector3.Dot(normal, prevNormal) < 0)
-                    normal *= -1;
-
-                float bankAngle = GetBankAngle(tangent, curvature, MaxBankAngle);
-
-                Gizmos.color = SplineColor;
-                Gizmos.DrawLine(prevPos, currPos);
-                Gizmos.color = TangentColor;
-                Gizmos.DrawRay(currPos, tangent.normalized);
-                Gizmos.color = CurvatureColor;
-                Gizmos.DrawRay(currPos, curvature.normalized);
-                Gizmos.color = NormalColor;
-                Gizmos.DrawRay(currPos, normal);
-                Gizmos.color = BankColor;
-                Gizmos.DrawRay(currPos, Quaternion.AngleAxis(bankAngle, tangent) * Vector3.up);
-                prevPos = currPos;
-                prevNormal = normal;
-            }
+            var curve = new Bezier(resolution, controlPoints);
+            return curve.GetCurvePoints();
         }
     }
 }

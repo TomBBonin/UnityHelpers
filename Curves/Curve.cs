@@ -5,9 +5,6 @@
  * https://github.com/tombbonin
  */
 
-using System;
-using System.Linq;
-using System.Runtime.CompilerServices;
 using UnityEngine;
 
 namespace Curves
@@ -53,7 +50,35 @@ namespace Curves
 
         public abstract CurvePoint[] GetCurvePoints();
 
-        public abstract void Draw();
+        public void Draw()
+        {
+            // call in OnDrawGizmos
+            if (ControlPoints == null)
+                return;
+
+            foreach (var point in ControlPoints)
+            {
+                Gizmos.color = Color.yellow;
+                Gizmos.DrawWireSphere(point, 0.5f);
+            }
+
+            var pointsOnCurve = GetCurvePoints();
+            var prevPos = pointsOnCurve[0];
+            foreach (var curvePos in pointsOnCurve)
+            {
+                Gizmos.color = SplineColor;
+                Gizmos.DrawLine(prevPos.Position, curvePos.Position);
+                Gizmos.color = TangentColor;
+                Gizmos.DrawRay(curvePos.Position, curvePos.Tangent.normalized);
+                Gizmos.color = CurvatureColor;
+                Gizmos.DrawRay(curvePos.Position, curvePos.Curvature.normalized);
+                Gizmos.color = NormalColor;
+                Gizmos.DrawRay(curvePos.Position, curvePos.Normal);
+                Gizmos.color = BankColor;
+                Gizmos.DrawRay(curvePos.Position, Quaternion.AngleAxis(curvePos.Bank, curvePos.Tangent) * Vector3.up);
+                prevPos = curvePos;
+            }
+        }
 
         public static float GetBankAngle(Vector3 tangent, Vector3 curvature, float maxBank)
         {
