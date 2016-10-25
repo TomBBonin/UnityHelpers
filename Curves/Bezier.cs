@@ -14,6 +14,7 @@ namespace Curves
     {
         private enum Type { Linear, Cubic, Quadratic }
         private readonly Type _curveType;
+        private CurvePoint[] _curvePoints;
 
         public Bezier(int resolution, Vector3[] controlPoints) : base(resolution, controlPoints)
         {
@@ -145,31 +146,36 @@ namespace Curves
 
         public override CurvePoint[] GetCurvePoints()
         {
+            // avoids rebuilding entire curve on every call, should be cleared if we wanted to rebuild the curve (if control points move for example)
+            if(_curvePoints != null)
+                return _curvePoints;
+
             // First for loop goes through each control point, the second subdivides the path between CPs based on resolution
             var distanceOnCurve = 0f;
-            var prevPos = new CurvePoint { Position = ControlPoints[0] };
-            var nbPositions = ControlPoints.Length * Resolution;
-            var positions = new CurvePoint[nbPositions + 1];
-            var step = 1f / nbPositions;
-            for (var i = 0; i <= nbPositions; i++)
+            var prevPoint = new CurvePoint { Position = ControlPoints[0] };
+            var nbPoints = ControlPoints.Length * Resolution;
+            var points = new CurvePoint[nbPoints];
+            var step = 1f / (nbPoints - 1);
+            for (var i = 0; i < nbPoints; i++)
             {
                 var t = i * step;
-                var posOnCurve = new CurvePoint();
-                posOnCurve.Position = Evaluate(t, out posOnCurve.Tangent, out posOnCurve.Curvature);
-                posOnCurve.Bank = GetBankAngle(posOnCurve.Tangent, posOnCurve.Curvature, MaxBankAngle);
+                var point = new CurvePoint();
+                point.Position = Evaluate(t, out point.Tangent, out point.Curvature);
+                point.Bank = GetBankAngle(point.Tangent, point.Curvature, MaxBankAngle);
 
                 // Currently breaks if 3 consecutive points are colinear, to be improved with second pass on curve
-                posOnCurve.Normal = Vector3.Cross(posOnCurve.Curvature, posOnCurve.Tangent).normalized;
-                if (Vector3.Dot(posOnCurve.Normal, prevPos.Normal) < 0)
-                    posOnCurve.Normal *= -1;
+                point.Normal = Vector3.Cross(point.Curvature, point.Tangent).normalized;
+                if (Vector3.Dot(point.Normal, prevPoint.Normal) < 0)
+                    point.Normal *= -1;
 
-                distanceOnCurve += Vector3.Distance(posOnCurve.Position, prevPos.Position);
-                posOnCurve.DistanceOnCurve = distanceOnCurve;
-                positions[i] = posOnCurve;
-                prevPos = posOnCurve;
+                distanceOnCurve += Vector3.Distance(point.Position, prevPoint.Position);
+                point.DistanceOnCurve = distanceOnCurve;
+                points[i] = point;
+                prevPoint = point;
             }
-            FixNormals(ref positions);
-            return positions;
+            FixNormals(ref points);
+            _curvePoints = points;
+            return points;
         }
 
         public static CurvePoint[] GetCurvePoints(int resolution, Vector3[] controlPoints)
@@ -177,5 +183,5 @@ namespace Curves
             var curve = new Bezier(resolution, controlPoints);
             return curve.GetCurvePoints();
         }
-    }
+    } 
 }

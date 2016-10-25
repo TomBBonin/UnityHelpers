@@ -17,6 +17,7 @@ namespace Curves
     {
         public bool CloseLoop;
         private float[] CPDists;
+        private CurvePoint[] _curvePoints;
 
         public CatmullRom(int resolution, Vector3[] controlPoints, bool closeLoop = false) : base(resolution, controlPoints)
         {
@@ -81,16 +82,15 @@ namespace Curves
             var i = 0;
             while (i < CPDists.Length - 1 && posOnCurve >= CPDists[i])
                 i++;
-            i--;
 
-            var p0Dist = CPDists[i];
-            var p1Dist = CPDists[i + 1];
-            var localT = (posOnCurve - p0Dist) / (p1Dist - p0Dist);
+            var p0Dist = CPDists[i - 1];
+            var p1Dist = CPDists[i];
+            var localT = (posOnCurve - p0Dist) / (p1Dist - p0Dist); // same as inverseLerp
 
-            var p0 = ControlPoints[i];
-            var p1 = ControlPoints[GetClampedPointIdx(i + 1)];
-            var m0 = 0.5f * (p1 - ControlPoints[GetClampedPointIdx(i - 1)]);
-            var m1 = 0.5f * (ControlPoints[GetClampedPointIdx(i + 2)] - p0);
+            var p0 = ControlPoints[i - 1];
+            var p1 = ControlPoints[GetClampedPointIdx(i)];
+            var m0 = 0.5f * (p1 - ControlPoints[GetClampedPointIdx(i - 2)]);
+            var m1 = 0.5f * (ControlPoints[GetClampedPointIdx(i + 1)] - p0);
 
             return Evaluate(p0, p1, m0, m1, localT, out tangent, out curvature);
         }
@@ -114,12 +114,16 @@ namespace Curves
 
         public override CurvePoint[] GetCurvePoints()
         {
+            // avoids rebuilding entire curve on every call, should be cleared if we wanted to rebuild the curve (if control points move for example)
+            if (_curvePoints != null)
+                return _curvePoints;
+
             // First for loop goes through each control point, the second subdivides the path between CPs based on resolution
             var distanceOnCurve = 0f;
-            var prevPos = new CurvePoint { Position = ControlPoints[0] };
+            var prevPoint = new CurvePoint { Position = ControlPoints[0] };
             // If we are looping, we are adding an extra segment, so we need an extra point
             var nbPoints = CloseLoop ? ControlPoints.Length : ControlPoints.Length - 1;
-            var positions = new CurvePoint[nbPoints * Resolution + 1];
+            var points = new CurvePoint[nbPoints * Resolution + 1];
             Vector3 p0 = Vector3.zero, p1 = Vector3.zero, m0 = Vector3.zero, m1 = Vector3.zero;
             for (var i = 0; i < nbPoints; i++)
             {
@@ -129,29 +133,30 @@ namespace Curves
                 m1 = 0.5f * (ControlPoints[GetClampedPointIdx(i + 2)] - p0);
                 // Second for loop actually creates the spline for this particular segment
                 for (var j = 0; j < Resolution; j++)
-                    positions[i * Resolution + j] = GetPointOnCurve(p0, p1, m0, m1, (float)j / Resolution, ref distanceOnCurve, ref prevPos);
+                    points[i * Resolution + j] = GetPointOnCurve(p0, p1, m0, m1, (float)j / Resolution, ref distanceOnCurve, ref prevPoint);
             }
             // we have to manually add the last point on the spline
-            positions[nbPoints * Resolution] = GetPointOnCurve(p0, p1, m0, m1, 1f, ref distanceOnCurve, ref prevPos);
-            FixNormals(ref positions);
-            return positions;
+            points[nbPoints * Resolution] = GetPointOnCurve(p0, p1, m0, m1, 1f, ref distanceOnCurve, ref prevPoint);
+            FixNormals(ref points);
+            _curvePoints = points;
+            return points;
         }
 
-        private static CurvePoint GetPointOnCurve(Vector3 p0, Vector3 p1, Vector3 m0, Vector3 m1, float t, ref float distanceOnCurve, ref CurvePoint prevPos)
+        private static CurvePoint GetPointOnCurve(Vector3 p0, Vector3 p1, Vector3 m0, Vector3 m1, float t, ref float distanceOnCurve, ref CurvePoint prevPoint)
         {
-            var posOnCurve = new CurvePoint();
-            posOnCurve.Position = Evaluate(p0, p1, m0, m1, t, out posOnCurve.Tangent, out posOnCurve.Curvature);
-            posOnCurve.Bank = GetBankAngle(posOnCurve.Tangent, posOnCurve.Curvature, MaxBankAngle);
+            var point = new CurvePoint();
+            point.Position = Evaluate(p0, p1, m0, m1, t, out point.Tangent, out point.Curvature);
+            point.Bank = GetBankAngle(point.Tangent, point.Curvature, MaxBankAngle);
 
             // Currently breaks if 3 consecutive points are colinear, to be improved with second pass on curve
-            posOnCurve.Normal = Vector3.Cross(posOnCurve.Curvature, posOnCurve.Tangent).normalized;
-            if (Vector3.Dot(posOnCurve.Normal, prevPos.Normal) < 0)
-                posOnCurve.Normal *= -1;
+            point.Normal = Vector3.Cross(point.Curvature, point.Tangent).normalized;
+            if (Vector3.Dot(point.Normal, prevPoint.Normal) < 0)
+                point.Normal *= -1;
 
-            distanceOnCurve += Vector3.Distance(posOnCurve.Position, prevPos.Position);
-            posOnCurve.DistanceOnCurve = distanceOnCurve;
-            prevPos = posOnCurve;
-            return posOnCurve;
+            distanceOnCurve += Vector3.Distance(point.Position, prevPoint.Position);
+            point.DistanceOnCurve = distanceOnCurve;
+            prevPoint = point;
+            return point;
         }
 
         public static CurvePoint[] GetCurvePoints(int resolution, Vector3[] controlPoints, bool closeLoop = false)

@@ -83,8 +83,8 @@ namespace Curves
         public static float GetBankAngle(Vector3 tangent, Vector3 curvature, float maxBank)
         {
             float bank =
-                Mathf.Clamp01((1 - Vector3.Dot(tangent.normalized, curvature.normalized))*
-                              (curvature.magnitude/tangent.magnitude)*0.3f);
+                Mathf.Clamp01((1 - Vector3.Dot(tangent.normalized, curvature.normalized)) *
+                              (curvature.magnitude / tangent.magnitude) * 0.3f);
             float angle = Mathf.Lerp(0, maxBank, bank);
             if (Vector3.Dot(Vector3.Cross(Vector3.up, curvature), tangent) < 0)
                 angle *= -1;
@@ -99,7 +99,7 @@ namespace Curves
             var curvature = Vector3.zero;
             for (var j = 1; j <= resolution; j++)
             {
-                var t = 1f/resolution*j;
+                var t = 1f / resolution * j;
                 pointsOnCurve[j] = curve.Evaluate(t, out tangent, out curvature);
             }
             return pointsOnCurve;
@@ -112,8 +112,8 @@ namespace Curves
                 var point = curvePoints[i];
                 if (point.Normal == Vector3.zero)
                 {
-                     // look forward until we find a non zero normal
-                    int j = i;
+                    // look forward until we find a non zero normal
+                    var j = i;
                     while (j < curvePoints.Length)
                     {
                         if (curvePoints[j].Normal != Vector3.zero)
